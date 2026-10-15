@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuantConnect LEAN 架构与使用</title>
+<style>
+  :root {
+    --paper: #e8e2d6;
+    --ink: #1b232c;
+    --muted: #5d6a76;
+    --card: #f7f4ee;
+    --line: #cfc6b8;
+    --gold: #8a5a12;
+    --gold-bg: #f3e6cf;
+    --blue: #1a5568;
+    --blue-bg: #e4eef2;
+    --green: #1e5438;
+    --green-bg: #e3f0e7;
+    --rust: #8a3b28;
+    --rust-bg: #f6e6df;
+    --violet: #3e345c;
+    --violet-bg: #ece7f3;
+    --mark: #c2410c;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 400px at 10% -10%, #f3ecdf, transparent 50%),
+      var(--paper);
+    font: 15px/1.55 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  button, input { font: inherit; color: inherit; }
+  code, .mono { font-family: Consolas, "Cascadia Mono", "Sarasa Mono SC", monospace; }
+  a { color: var(--blue); }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 22px 80px; }
+
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--ink);
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+  }
+  .brand {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+  }
+  .mark {
+    width: 42px;
+    height: 42px;
+    border: 1.5px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 4px;
+    gap: 3px;
+  }
+  .mark i { display: block; background: var(--ink); }
+  .mark i:nth-child(1) { background: var(--mark); }
+  .kicker {
+    margin: 0;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  h1 { margin: 0; font-size: 34px; line-height: 1.1; font-weight: 650; letter-spacing: -0.03em; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: flex-end; }
+  nav a { color: var(--ink); text-decoration: none; border-bottom: 1px solid transparent; }
+  nav a:hover { border-bottom-color: var(--ink); }
+
+  .lead { max-width: 68ch; margin: 0 0 18px; font-size: 17px; }
+  .note { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
+
+  .switch {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin: 8px 0 14px;
+  }
+  .switch p { margin: 0 10px 0 0; font-size: 13px; color: var(--muted); }
+  .switch button, .ghost {
+    background: transparent;
+    border: 1px solid var(--ink);
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #f6f1e8; }
+  #modeCaption { margin: 0 0 14px; font-size: 13px; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 14px;
+    align-items: start;
+  }
+  .detail {
+    position: sticky;
+    top: 12px;
+    background: var(--ink);
+    color: #f3eee6;
+    padding: 16px 16px 18px;
+    min-height: 240px;
+  }
+  .detail .kicker { color: #c9b59a; }
+  .detail h2 { margin: 4px 0 8px; font-size: 22px; line-height: 1.2; }
+  .detail p { margin: 0 0 8px; color: #e6e0d6; }
+  .detail .cls { color: #f0c48a; font-size: 12.5px; }
+
+  .band { margin: 0 0 8px; }
+  .band-h {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: baseline;
+    margin: 0 0 6px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .band-h b { letter-spacing: 0; text-transform: none; font-size: 13px; }
+  .arrow {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    margin: 2px 0 8px;
+  }
+
+  .grid { display: grid; gap: 8px; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g6 { grid-template-columns: repeat(6, 1fr); }
+
+  .card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 9px 10px 10px;
+    cursor: pointer;
+  }
+  .card:hover { border-color: var(--ink); }
+  .card[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .card .iface, .chip .iface {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .card strong, .chip strong { display: block; font-size: 14px; line-height: 1.3; }
+  .card em, .impl {
+    display: block;
+    font-style: normal;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 11.5px;
+    color: var(--blue);
+    margin-top: 3px;
+    overflow-wrap: break-word;
+  }
+  .card .role { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+  .user .card { background: var(--gold-bg); border-color: #e0c89a; }
+  .entry .card { background: #f7f4ee; }
+  .engine {
+    border: 1.5px solid var(--blue);
+    background: #f4f8fa;
+    padding: 10px;
+  }
+  .engine .band-h { color: var(--blue); }
+  .engine-grid { display: flex; flex-direction: column; gap: 8px; }
+  .manager {
+    background: var(--blue-bg);
+    border-color: #b7d0da;
+  }
+  .loop-mini {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 16px;
+  }
+  .loop-mini li {
+    font-size: 12px;
+    padding: 3px 0 3px 16px;
+    position: relative;
+  }
+  .loop-mini li::before {
+    content: "";
+    width: 7px; height: 7px;
+    border: 1.5px solid var(--blue);
+    border-radius: 50%;
+    position: absolute;
+    left: 0; top: 8px;
+    background: #f4f8fa;
+  }
+  .sys .card { background: var(--violet-bg); border-color: #d5cce4; padding: 8px; }
+  .sys .card strong { font-size: 13px; }
+  .domain .chip {
+    background: var(--green-bg);
+    border: 1px solid #b7d4c2;
+    padding: 8px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .domain .chip[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--ink); }
+  .io .card { background: var(--rust-bg); border-color: #e4c4b8; }
+
+  section { margin-top: 42px; }
+  section h2 {
+    margin: 0 0 6px;
+    font-size: 26px;
+    letter-spacing: -0.03em;
+  }
+  .sec-no { color: var(--mark); font-size: 12px; letter-spacing: 0.14em; margin: 0; }
+
+  .timeline { list-style: none; margin: 14px 0 0; padding: 0 0 0 18px; border-left: 1.5px solid var(--ink); }
+  .timeline li { margin: 0 0 10px; position: relative; }
+  .step {
+    width: 100%;
+    text-align: left;
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .step[aria-pressed="true"] { background: #fff; box-shadow: inset 3px 0 0 var(--mark); }
+  .step b { display: inline-block; width: 1.6em; }
+  .step span { color: var(--muted); display: block; margin-top: 2px; font-size: 13px; }
+  .return {
+    margin: 4px 0 0 18px;
+    font-size: 13px;
+    color: var(--blue);
+  }
+
+  .pipe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; }
+  .stage {
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 10px;
+    min-height: 148px;
+    position: relative;
+  }
+  .stage .n {
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    color: var(--mark);
+  }
+  .stage h3 { margin: 2px 0 6px; font-size: 15px; }
+  .stage p { margin: 0; color: var(--muted); font-size: 12.5px; }
+  .out {
+    margin-top: 8px;
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    color: var(--gold);
+  }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  pre {
+    margin: 0;
+    background: #1b232c;
+    color: #f3eee6;
+    padding: 12px 14px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .code-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 6px;
+    color: var(--muted);
+  }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; background: var(--card); }
+  th, td { border: 1px solid var(--line); padding: 7px 8px; text-align: left; vertical-align: top; }
+  th { background: #efeae1; font-weight: 650; }
+  td.mono, table .mono { font-size: 12px; }
+
+  .orderflow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 12px; }
+  .orderflow .card { min-height: 92px; cursor: default; }
+  .orderflow .card strong { font-size: 13px; }
+
+  .use-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 14px; }
+  .cmd {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 8px;
+    margin: 0 0 10px;
+  }
+  .cmd i {
+    width: 28px; height: 28px;
+    border: 1px solid var(--ink);
+    display: grid; place-items: center;
+    font-style: normal;
+    font-size: 13px;
+  }
+  .cmd p { margin: 0; }
+  .cmd code { font-size: 12.5px; }
+
+  .mods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+  .mods div { background: var(--card); border: 1px solid var(--line); padding: 8px 10px; }
+  .mods strong { display: block; }
+  .mods span { color: var(--muted); font-size: 12.5px; }
+
+  footer { margin-top: 36px; color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 12px; }
+
+  @media (max-width: 900px) {
+    h1 { font-size: 28px; }
+    header.top, .layout, .cols, .use-grid { display: block; }
+    nav { justify-content: flex-start; margin-top: 10px; }
+    .detail { position: static; margin-bottom: 12px; }
+    .g3, .g6, .pipe, .orderflow, .mods { grid-template-columns: 1fr 1fr; }
+    .g4 { grid-template-columns: 1fr 1fr; }
+    .loop-mini { grid-template-columns: 1fr; }
+  }
+  @media print {
+    .detail { position: static; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div>
+        <p class="kicker">QuantConnect · LEAN</p>
+        <h1>算法引擎怎么拼在一起</h1>
+      </div>
+    </div>
+    <nav>
+      <a href="#map">架构</a>
+      <a href="#loop">一次循环</a>
+      <a href="#write">两种写法</a>
+      <a href="#switch">回测与实盘</a>
+      <a href="#use">怎么跑</a>
+    </nav>
+  </header>
+
+  <p class="lead">LEAN 把策略、行情、撮合、记账拆成可替换的 Handler。你写的 <code>QCAlgorithm</code> 不变，换 <code>config.json</code> 里的 environment，同一套代码就从回测走到模拟盘或实盘。</p>
+  <p class="note">类名取自公开仓库 <span class="mono">QuantConnect/Lean</span> 的 <span class="mono">Launcher/config.json</span> 与 Engine。点图中任意一块可看它的职责。</p>
+
+  <div class="switch" role="group" aria-label="运行模式">
+    <p>图上的类名按这个环境标注</p>
+    <button type="button" data-mode="backtest" aria-pressed="true">回测</button>
+    <button type="button" data-mode="paper" aria-pressed="false">模拟盘</button>
+    <button type="button" data-mode="live" aria-pressed="false">实盘</button>
+  </div>
+  <p id="modeCaption">环境 <span class="mono">backtesting</span>：行情读本地文件，成交由 FillModel 在进程内完成。</p>
+
+  <section id="map">
+    <p class="sec-no">01</p>
+    <h2>分层总图</h2>
+    <div class="layout">
+      <div>
+        <div class="band user">
+          <div class="band-h">策略层 <b>你写的代码</b></div>
+          <div class="grid g2">
+            <button type="button" class="card" data-key="algo">
+              <span class="iface">QCAlgorithm</span>
+              <strong>经典策略</strong>
+              <span class="role">Initialize 订阅，OnData 里自己下单</span>
+            </button>
+            <button type="button" class="card" data-key="framework">
+              <span class="iface">Algorithm Framework</span>
+              <strong>五段模型</strong>
+              <span class="role">选股 → Alpha → 组合 → 风控 → 执行</span>
+            </button>
+          </div>
+        </div>
+        <div class="arrow">引擎调用上面的回调，策略不自己读文件、不自己连券商</div>
+
+        <div class="band entry">
+          <div class="band-h">入口 <b>谁把引擎拉起来</b></div>
+          <div class="grid g2">
+            <button type="button" class="card" data-key="cli">
+              <span class="iface">Lean CLI · Docker</span>
+              <strong>lean backtest / research / live</strong>
+              <span class="role">官方推荐。本地镜像与云端包版本对齐</span>
+            </button>
+            <button type="button" class="card" data-key="launcher">
+              <span class="iface">Launcher</span>
+              <strong>config.json → Engine.Run</strong>
+              <span class="role">直接跑开源仓库时的进程入口</span>
+            </button>
+          </div>
+        </div>
+        <div class="arrow">Launcher 按 environment 装上下面这组 Handler，再交给 AlgorithmManager</div>
+
+        <div class="engine">
+          <div class="band-h">引擎 <b>QuantConnect.Lean.Engine</b></div>
+          <div class="engine-grid">
+            <button type="button" class="card manager" data-key="manager">
+              <span class="iface">AlgorithmManager</span>
+              <strong>时间片循环</strong>
+              <ol class="loop-mini">
+                <li>Synchronizer 交出 TimeSlice</li>
+                <li>更新价格、公司行动、指标</li>
+                <li>OnData 或 Framework</li>
+                <li>订单、定时任务、净值采样</li>
+              </ol>
+            </button>
+            <div class="grid g3">
+              <button type="button" class="card" data-key="setup">
+                <span class="iface">ISetupHandler</span>
+                <strong>装配</strong>
+                <em data-slot="setup">BacktestingSetupHandler</em>
+              </button>
+              <button type="button" class="card" data-key="datafeed">
+                <span class="iface">IDataFeed</span>
+                <strong>行情</strong>
+                <em data-slot="data">FileSystemDataFeed</em>
+                <span class="role" data-slot="queue">磁盘上的 zip / csv</span>
+              </button>
+              <button type="button" class="card" data-key="tx">
+                <span class="iface">ITransactionHandler</span>
+                <strong>订单</strong>
+                <em data-slot="tx">BacktestingTransactionHandler</em>
+              </button>
+              <button type="button" class="card" data-key="results">
+                <span class="iface">IResultHandler</span>
+                <strong>结果</strong>
+                <em data-slot="result">BacktestingResultHandler</em>
+              </button>
+              <button type="button" class="card" data-key="realtime">
+                <span class="iface">IRealTimeHandler</span>
+                <strong>时钟</strong>
+                <em data-slot="time">BacktestingRealTimeHandler</em>
+              </button>
+              <button type="button" class="card" data-key="history">
+                <span class="iface">IHistoryProvider</span>
+                <strong>History()</strong>
+                <em data-slot="history">SubscriptionDataReaderHistoryProvider</em>
+              </button>
+            </div>
+          </div>
+          <div class="band-h" style="margin-top:10px">系统 Handler <b>任务与通信，不碰撮合</b></div>
+          <div class="grid g4 sys">
+            <button type="button" class="card" data-key="job"><span class="iface">IJobQueueHandler</span><strong>任务队列</strong></button>
+            <button type="button" class="card" data-key="api"><span class="iface">IApi</span><strong>云端 API</strong></button>
+            <button type="button" class="card" data-key="msg"><span class="iface">IMessagingHandler</span><strong>状态消息</strong></button>
+            <button type="button" class="card" data-key="leanmgr"><span class="iface">ILeanManager</span><strong>运行桥</strong></button>
+          </div>
+        </div>
+        <div class="arrow">循环里流转的是下面这些对象，不是原始文件</div>
+
+        <div class="band domain">
+          <div class="band-h">领域对象 <b>Common</b></div>
+          <div class="grid g6">
+            <button type="button" class="chip" data-key="security"><span class="iface">Security</span><strong>证券</strong></button>
+            <button type="button" class="chip" data-key="slice"><span class="iface">Slice</span><strong>切片</strong></button>
+            <button type="button" class="chip" data-key="order"><span class="iface">Order</span><strong>订单</strong></button>
+            <button type="button" class="chip" data-key="portfolio"><span class="iface">Portfolio</span><strong>组合</strong></button>
+            <button type="button" class="chip" data-key="universe"><span class="iface">Universe</span><strong>宇宙</strong></button>
+            <button type="button" class="chip" data-key="indicator"><span class="iface">Indicator</span><strong>指标</strong></button>
+          </div>
+        </div>
+        <div class="arrow">两端可以独立替换：行情源和下单通道不一定是同一家</div>
+
+        <div class="band io">
+          <div class="band-h">外部 <b>数据与交易</b></div>
+          <div class="grid g2">
+            <button type="button" class="card" data-key="files">
+              <span class="iface">Data · Map · Factor</span>
+              <strong>数据从哪来</strong>
+              <em data-slot="queue">磁盘上的 zip / csv</em>
+            </button>
+            <button type="button" class="card" data-key="broker">
+              <span class="iface">IBrokerageModel 与 IBrokerage</span>
+              <strong>规则，以及真正的连接</strong>
+              <em data-slot="broker">只用 IBrokerageModel</em>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="detail" id="detail">
+        <p class="kicker" id="dKicker">从这里读</p>
+        <h2 id="dTitle">策略不动，Handler 在换</h2>
+        <p id="dBody">从上往下看。你只实现 QCAlgorithm。AlgorithmManager 按时间把 Slice 送进来，再把订单交给 TransactionHandler。</p>
+        <p id="dMore">图中的类名会随上方的回测、模拟盘、实盘开关改变。</p>
+        <p class="cls" id="dCls">Engine · LeanEngineAlgorithmHandlers · LeanEngineSystemHandlers</p>
+      </aside>
+    </div>
+  </section>
+
+  <section id="loop">
+    <p class="sec-no">02</p>
+    <h2>一个时间片里发生什么</h2>
+    <p>回测把历史走完；实盘则停在“等下一块数据”。第 3 步到第 7 步不断重复。</p>
+    <ol class="timeline" id="timeline">
+      <li><button type="button" class="step" data-step="0"><b>1</b> 装配。SetupHandler 创建算法，设置资金和经纪商模型，调用 Initialize。<span>回测：BacktestingSetupHandler。实盘：BrokerageSetupHandler，还要连接账户。</span></button></li>
+      <li><button type="button" class="step" data-step="1"><b>2</b> 订阅。AddEquity、AddCrypto、AddUniverse 登记到 DataManager。<span>DataFeed 在 Initialize 之前就已经挂上，这样新证券能马上被收进订阅。</span></button></li>
+      <li><button type="button" class="step" data-step="2" aria-pressed="true"><b>3</b> 切片。Synchronizer 把多路数据对齐成一个 TimeSlice。<span>日线和分钟线可以在同一次回调里出现，时间以算法时钟为准。</span></button></li>
+      <li><button type="button" class="step" data-step="3"><b>4</b> 更新。写入 Security 价格，应用分红拆股，推进 Consolidator 和指标。<span>OnData 里读到的 SMA，是这块数据已经滚进去之后的值。</span></button></li>
+      <li><button type="button" class="step" data-step="4"><b>5</b> 策略。经典算法进入 OnData；装了 Framework 就跑五段模型。<span>宇宙有增减时先 OnSecuritiesChanged。</span></button></li>
+      <li><button type="button" class="step" data-step="5"><b>6</b> 报单。购买力模型先检查，然后 TransactionHandler 撮合或送出。<span>此步的实现随模式变化，见下方订单路径。</span></button></li>
+      <li><button type="button" class="step" data-step="6"><b>7</b> 回写。OrderEvent 更新 Portfolio，触发 OnOrderEvent；ResultHandler 采样权益。<span>Schedule 定时任务也在这条同步路径上执行。</span></button></li>
+      <li><button type="button" class="step" data-step="7"><b>8</b> 结束。时间走完则 OnEndOfAlgorithm，结果写入回测目录或持续推到实盘监控。<span>没走完就回到第 3 步。</span></button></li>
+    </ol>
+    <p class="return">第 7 步之后，只要算法时间还没到结束日，就回到第 3 步取下一块切片。</p>
+
+    <h3 style="margin:22px 0 0;font-size:18px">一笔订单怎么走</h3>
+    <div class="orderflow">
+      <div class="card"><span class="iface">策略</span><strong>MarketOrder / SetHoldings</strong><span class="role">只生成订单请求</span></div>
+      <div class="card"><span class="iface">Security</span><strong>购买力预检</strong><span class="role">保证金不够会直接拒绝</span></div>
+      <div class="card"><span class="iface">ITransactionHandler</span><strong data-slot="tx">BacktestingTransactionHandler</strong><span class="role">回测与模拟盘走本地撮合</span></div>
+      <div class="card"><span class="iface">成交</span><strong data-slot="fill">FillModel 按行情假设成交</strong><span class="role">费用和滑点来自 BrokerageModel</span></div>
+      <div class="card"><span class="iface">OrderEvent</span><strong>状态回到算法</strong><span class="role">Submitted、Filled、Canceled</span></div>
+      <div class="card"><span class="iface">Portfolio</span><strong>现金与持仓更新</strong><span class="role">然后才会进入 OnOrderEvent</span></div>
+    </div>
+  </section>
+
+  <section id="write">
+    <p class="sec-no">03</p>
+    <h2>策略的两种写法</h2>
+    <p>两条路都继承 <code>QCAlgorithm</code>，最后都把订单送进同一个 TransactionHandler。Python 用 snake_case；C# 用同名的 PascalCase，文件是 <code>Main.cs</code>。</p>
+    <div class="pipe">
+      <div class="stage"><div class="n">01</div><h3>选股</h3><p>Universe Selection。决定这一期交易哪些标的，变动通过 OnSecuritiesChanged 通知。</p><div class="out">→ 证券集合</div></div>
+      <div class="stage"><div class="n">02</div><h3>Alpha</h3><p>对每个标的给出 Insight：涨、跌或平，外加有效期。</p><div class="out">→ Insight</div></div>
+      <div class="stage"><div class="n">03</div><h3>组合</h3><p>Portfolio Construction 把 Insight 收成目标权重。</p><div class="out">→ PortfolioTarget</div></div>
+      <div class="stage"><div class="n">04</div><h3>风控</h3><p>Risk Management 可以削减、清空目标，不能凭空加仓。</p><div class="out">→ 调整后的目标</div></div>
+      <div class="stage"><div class="n">05</div><h3>执行</h3><p>Execution 比较目标和当前持仓，发出订单。</p><div class="out">→ Order</div></div>
+    </div>
+
+    <div class="cols">
+      <div>
+        <div class="code-label"><span>经典 · main.py</span><span>规则全写在 OnData</span></div>
+        <pre>from AlgorithmImports import *
+
+class SmaCross(QCAlgorithm):
+    def initialize(self):
+        self.set_start_date(2018, 1, 1)
+        self.set_cash(100_000)
+        self.symbol = self.add_equity("SPY", Resolution.DAILY).symbol
+        self.fast = self.sma(self.symbol, 10, Resolution.DAILY)
+        self.slow = self.sma(self.symbol, 30, Resolution.DAILY)
+
+    def on_data(self, data: Slice):
+        if not self.fast.is_ready or not self.slow.is_ready:
+            return
+        holding = self.portfolio[self.symbol]
+        if not holding.invested and self.fast.current.value &gt; self.slow.current.value:
+            self.set_holdings(self.symbol, 1)
+        elif holding.invested and self.fast.current.value &lt; self.slow.current.value:
+            self.liquidate(self.symbol)</pre>
+      </div>
+      <div>
+        <div class="code-label"><span>Framework · main.py</span><span>Initialize 里把五段装上</span></div>
+        <pre>from AlgorithmImports import *
+
+class FrameworkDemo(QCAlgorithm):
+    def initialize(self):
+        self.set_start_date(2018, 1, 1)
+        self.set_cash(100_000)
+        self.universe_settings.resolution = Resolution.DAILY
+        symbol = Symbol.create("SPY", SecurityType.EQUITY, Market.USA)
+        self.set_universe_selection(ManualUniverseSelectionModel([symbol]))
+        self.add_alpha(EmaCrossAlphaModel(10, 30, Resolution.DAILY))
+        self.set_portfolio_construction(EqualWeightingPortfolioConstructionModel())
+        self.add_risk_management(MaximumDrawdownPercentPerSecurity(0.05))
+        self.set_execution(ImmediateExecutionModel())</pre>
+      </div>
+    </div>
+    <p class="note" style="margin-top:10px">手续费、滑点和保证金不写在下单那一行。它们来自 <code>set_brokerage_model(...)</code> 装上的 IBrokerageModel。这只改规则，不会登录券商。</p>
+  </section>
+
+  <section id="switch">
+    <p class="sec-no">04</p>
+    <h2>回测、模拟、实盘换的是哪几块</h2>
+    <p>策略类保持不动。<code>live-paper</code> 的成交仍用回测那只 TransactionHandler，在本地模拟；真仓才换成 <code>BrokerageTransactionHandler</code>。行情队列和下单券商可以拆开，例如 <code>live-interactive-iqfeed</code> 用盈透下单、IQFeed 供数。</p>
+    <table>
+      <thead>
+        <tr><th>插槽</th><th>回测 backtesting</th><th>模拟盘 live-paper</th><th>实盘 live-interactive</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Setup</td><td class="mono">BacktestingSetupHandler</td><td class="mono">BrokerageSetupHandler</td><td class="mono">BrokerageSetupHandler</td></tr>
+        <tr><td>DataFeed</td><td class="mono">FileSystemDataFeed</td><td class="mono">LiveTradingDataFeed</td><td class="mono">LiveTradingDataFeed</td></tr>
+        <tr><td>DataQueue</td><td>本地文件</td><td class="mono">LiveDataQueue</td><td class="mono">InteractiveBrokersBrokerage</td></tr>
+        <tr><td>Transaction</td><td class="mono">BacktestingTransactionHandler</td><td class="mono">BacktestingTransactionHandler</td><td class="mono">BrokerageTransactionHandler</td></tr>
+        <tr><td>Result</td><td class="mono">BacktestingResultHandler</td><td class="mono">LiveTradingResultHandler</td><td class="mono">LiveTradingResultHandler</td></tr>
+        <tr><td>RealTime</td><td class="mono">BacktestingRealTimeHandler</td><td class="mono">LiveTradingRealTimeHandler</td><td class="mono">LiveTradingRealTimeHandler</td></tr>
+        <tr><td>Brokerage</td><td>无连接，FillModel 成交</td><td class="mono">PaperBrokerage</td><td class="mono">InteractiveBrokersBrokerage</td></tr>
+        <tr><td>History</td><td class="mono">SubscriptionDataReaderHistoryProvider</td><td>环境里不覆盖</td><td class="mono">BrokerageHistoryProvider，再加本地文件</td></tr>
+      </tbody>
+    </table>
+    <p class="note" style="margin-top:8px">时钟也一起换：回测的 RealTimeHandler 把 <code>schedule.on</code> 对齐到算法时间；实盘按墙钟触发。OnData 拿到的仍是 Slice。</p>
+  </section>
+
+  <section id="use">
+    <p class="sec-no">05</p>
+    <h2>从零跑起来</h2>
+    <div class="use-grid">
+      <div>
+        <div class="cmd"><i>1</i><p>安装 CLI，并先启动 Docker。QuantConnect 文档要求使用 CLI 的组织处于付费层级。引擎源码是 Apache-2.0，也可以不装 CLI，直接跑 Launcher。<br><code>pip install lean</code></p></div>
+        <div class="cmd"><i>2</i><p>在空目录登录并生成工作区。此步会准备 LEAN 配置。<br><code>lean login</code><br><code>lean init</code></p></div>
+        <div class="cmd"><i>3</i><p>生成策略目录：<code>main.py</code>、<code>research.ipynb</code>、<code>config.json</code>。<br><code>lean project-create --language python "SmaCross"</code></p></div>
+        <div class="cmd"><i>4</i><p>写第 03 节里的算法。本地行情放在工作区 <code>data/</code>，股票日线路径形如 <code>data/equity/usa/daily/spy.zip</code>。随机数据可用 <code>lean data generate --help</code> 查看参数。</p></div>
+        <div class="cmd"><i>5</i><p>研究用笔记本，回测在 Docker 里跑，结果进 <code>SmaCross/backtests/&lt;时间戳&gt;/</code>。<br><code>lean research "SmaCross"</code><br><code>lean backtest "SmaCross"</code></p></div>
+        <div class="cmd"><i>6</i><p>云端回测会先同步再跑。本机实盘用向导选择券商和行情源，模拟盘选 Paper。<br><code>lean cloud backtest "SmaCross" --open --push</code><br><code>lean live deploy "SmaCross"</code></p></div>
+      </div>
+      <div>
+        <div class="code-label"><span>工作区</span><span>lean.json 管全局，config.json 管单个策略</span></div>
+        <pre>组织工作区/
+├── lean.json                 # 数据目录、组织
+├── data/
+│   └── equity/usa/daily/spy.zip
+└── SmaCross/
+    ├── main.py               # 或 Main.cs
+    ├── research.ipynb
+    ├── config.json           # 语言、参数
+    ├── backtests/&lt;时间戳&gt;/
+    └── live/&lt;时间戳&gt;/</pre>
+        <p class="note" style="margin-top:10px">不用 CLI 时：克隆 <span class="mono">github.com/QuantConnect/Lean</span>，编译并运行 Launcher。把 <span class="mono">Launcher/config.json</span> 的 <span class="mono">environment</span> 设为 <span class="mono">backtesting</span>，数据放进仓库的 Data 目录。</p>
+      </div>
+    </div>
+
+    <h3 style="margin:22px 0 0;font-size:18px">仓库里这几块各管什么</h3>
+    <div class="mods">
+      <div><strong class="mono">Algorithm</strong><span>QCAlgorithm，策略基类和事件</span></div>
+      <div><strong class="mono">Algorithm.Framework</strong><span>选股、Alpha、组合、风控、执行</span></div>
+      <div><strong class="mono">Common</strong><span>Security、Slice、Order、Portfolio</span></div>
+      <div><strong class="mono">Engine</strong><span>Engine、AlgorithmManager、全部 Handler</span></div>
+      <div><strong class="mono">Brokerages</strong><span>Paper、盈透、Binance 等连接</span></div>
+      <div><strong class="mono">Indicators</strong><span>SMA、EMA 以及合并 K 线的 Consolidator</span></div>
+      <div><strong class="mono">Launcher</strong><span>控制台入口和 config.json 环境表</span></div>
+      <div><strong class="mono">Algorithm.Python</strong><span>Python 策略装载进同一套引擎</span></div>
+    </div>
+  </section>
+
+  <footer>
+    架构说明，依据 QuantConnect/Lean 公开源码整理，不构成交易建议。实盘前用 Paper 环境把同一份算法跑通，确认订单路径是 BacktestingTransactionHandler 还是 BrokerageTransactionHandler。
+  </footer>
+</div>
+
+<script>
+const modes = {
+  backtest: {
+    caption: "环境 backtesting：行情读本地文件，成交由 FillModel 在进程内完成。",
+    setup: "BacktestingSetupHandler",
+    data: "FileSystemDataFeed",
+    queue: "磁盘上的 zip / csv",
+    tx: "BacktestingTransactionHandler",
+    result: "BacktestingResultHandler",
+    time: "BacktestingRealTimeHandler",
+    history: "SubscriptionDataReaderHistoryProvider",
+    broker: "只用 IBrokerageModel",
+    fill: "FillModel 按行情假设成交"
+  },
+  paper: {
+    caption: "环境 live-paper：行情走 LiveDataQueue，成交仍由 BacktestingTransactionHandler 本地模拟，券商对象是 PaperBrokerage。",
+    setup: "BrokerageSetupHandler",
+    data: "LiveTradingDataFeed",
+    queue: "LiveDataQueue",
+    tx: "BacktestingTransactionHandler",
+    result: "LiveTradingResultHandler",
+    time: "LiveTradingRealTimeHandler",
+    history: "此环境不覆盖 history-provider",
+    broker: "PaperBrokerage",
+    fill: "本地模拟成交，不送真仓"
+  },
+  live: {
+    caption: "环境 live-interactive：订单进入 BrokerageTransactionHandler，再交给 InteractiveBrokersBrokerage。把 data-queue-handler 换成别的行情源时，下单通道可以保持不变。",
+    setup: "BrokerageSetupHandler",
+    data: "LiveTradingDataFeed",
+    queue: "InteractiveBrokersBrokerage",
+    tx: "BrokerageTransactionHandler",
+    result: "LiveTradingResultHandler",
+    time: "LiveTradingRealTimeHandler",
+    history: "BrokerageHistoryProvider + 本地文件",
+    broker: "InteractiveBrokersBrokerage",
+    fill: "券商回报驱动成交"
+  }
+};
+
+const info = {
+  algo: ["QCAlgorithm", "经典策略", "Initialize 里设定日期、资金、证券和指标。之后每个切片进入 OnData。成交回报在 OnOrderEvent，持仓增删在 OnSecuritiesChanged，还可以挂 OnEndOfDay 和 OnEndOfAlgorithm。", "你不写时间循环，也不直接打开数据文件。"],
+  framework: ["Algorithm Framework", "五段模型", "选股模型决定标的；Alpha 发出 Insight；组合模型把 Insight 变成目标权重；风控模型只能削减这些目标；执行模型再去下单。", "装上这五段之后，引擎在每个切片上替你跑完，订单仍进入图上的 TransactionHandler。"],
+  cli: ["Lean CLI", "Docker 里的引擎", "lean backtest 和 lean research 使用 quantconnect/lean 镜像。lean live deploy 在本机实盘，向导里分开选择 brokerage 和 data-provider-live。lean cloud backtest 把工程推到云端跑。", "工作区根目录的 lean.json 记录数据目录；每个策略目录自己有 config.json。"],
+  launcher: ["Launcher / Program.cs", "进程入口", "先把 config.json 顶层配置读入，再用 environment 指定的那一块覆盖。接着从 JobQueue 取任务，创建 AlgorithmManager，调用 Engine.Run。", "改运行方式就是改 environment 的名字，例如 backtesting、live-paper、live-interactive。"],
+  manager: ["AlgorithmManager.Run", "主循环", "从 Synchronizer 取下一个 TimeSlice，更新证券，处理宇宙变化，调用 OnData，再让交易和结果 Handler 处理同步事件。", "用户代码跑在隔离器里。回测结束时触发 OnEndOfAlgorithm，并由 ResultHandler 写出统计。"],
+  setup: ["ISetupHandler", "装配算法", "创建算法实例，加载参数，设置现金、起止时间和经纪商模型，然后调用 Initialize。", "回测用 BacktestingSetupHandler。模拟盘和实盘用 BrokerageSetupHandler，因为还要连接账户并同步持仓。"],
+  datafeed: ["IDataFeed", "把订阅变成 Slice", "回测的 FileSystemDataFeed 读取按市场和分辨率放好的文件。实盘的 LiveTradingDataFeed 从 IDataQueueHandler 收流，再切成同一结构的 Slice。", "OnData 的参数类型因此不用随模式改变。"],
+  tx: ["ITransactionHandler", "订单如何成交", "策略只提交订单。回测和模拟盘用 BacktestingTransactionHandler，按 FillModel、手续费和滑点在本地成交。真仓用 BrokerageTransactionHandler，把订单交给 IBrokerage。", "成交生成 OrderEvent，Portfolio 与 OnOrderEvent 都从这里更新。"],
+  results: ["IResultHandler", "日志、图和权益", "收集 Debug、Plot、订单和权益曲线。回测在结束时写成结果包；实盘持续向外送状态。", "策略里不要自己开文件记净值，交给这个 Handler。"],
+  realtime: ["IRealTimeHandler", "定时与日终", "负责 schedule.on 和日终一类事件。回测把这些事件对齐到算法时间；实盘按真实时钟触发。", "回调仍和 OnData 一样，在算法线程上碰到组合与订单。"],
+  history: ["IHistoryProvider", "algorithm.history", "回测从本地订阅数据读取。实盘环境通常先问券商或行情源，不够再退回本地文件。", "live-paper 没有单独覆盖这项，沿用配置上层。live-interactive-iqfeed 会把历史指到 IQFeed。"],
+  job: ["IJobQueueHandler", "本次跑哪一个算法", "给出算法包：代码位置、参数、起止时间。本地 Launcher 用本地队列；云端接到 QuantConnect 的任务系统。", "策略代码看不到它。"],
+  api: ["IApi", "和云端通信", "登录、项目、云端回测这些 CLI 能力会用到 API。只在本机跑 Launcher 做研究时，这条线可以是空实现。", "它不负责撮合。"],
+  msg: ["IMessagingHandler", "运行状态", "把算法状态、日志和统计送到控制台或云端界面。ResultHandler 决定内容，Messaging 决定通道。", "本地回测的结果最终落在 backtests 目录。"],
+  leanmgr: ["ILeanManager", "运行期桥", "Engine 初始化时把系统 Handler、算法 Handler 和任务交给它，循环中会定期看到算法实例。", "本地与云端各有自己的实现，策略接口不变。"],
+  security: ["Security", "一只标的的状态", "包含价格、持仓、交易时段，以及手续费、滑点、结算和购买力模型。AddEquity 返回的就是它。", "下单前的保证金检查用它上面的 BuyingPowerModel。"],
+  slice: ["Slice", "一个时间点的数据包", "里面有 TradeBar、QuoteBar、Tick，也可以有分红、拆股和宇宙数据。OnData 的参数就是 Slice。", "用 contains_key 确认这个切片里真有该标的，再读价格。"],
+  order: ["Order / OrderTicket / OrderEvent", "请求、句柄、回报", "SetHoldings 和 MarketOrder 创建订单。OrderTicket 用来改单、撤单。每一次状态变化是一个 OrderEvent。", "订单类型包括市价、限价、止损。成交与否不由这几个类自己决定。"],
+  portfolio: ["Portfolio", "现金、持仓、权益", "成交应用到组合之后，invested、数量和盈亏才会变。回测成绩从这里采样。", "实盘中它按券商回报对齐，而不是按本地假设一直往前滚。"],
+  universe: ["Universe", "交易哪些标的", "选股数据到达时，引擎增删 Security，并调用 OnSecuritiesChanged。Framework 的选股模型是这条路径的插件。", "经典算法也可以 AddUniverse，不必手写一长串代码。"],
+  indicator: ["Indicator 与 Consolidator", "指标何时更新", "self.sma、self.ema 会在订阅上登记合并器和指标。数据推进时先更新指标，再进入 OnData。", "可以用分钟订阅合成日线指标，分辨率不必和原始数据相同。"],
+  files: ["本地数据目录", "文件怎么摆", "常见路径是 data/equity/usa/daily/spy.zip，按证券类型、市场、分辨率分层。map 与 factor 文件处理代码变更和复权。", "实盘的“当前 bar”不从这里读，而从 DataQueue 来；History 仍可能落到这些文件。"],
+  broker: ["模型 vs 连接", "两层不要混", "IBrokerageModel 是规则：手续费、滑点、成交假设、结算和保证金。回测必须有它。IBrokerage 才是连接，例如 PaperBrokerage 或 InteractiveBrokersBrokerage。", "set_brokerage_model 只换规则，不登录。登录发生在 live 环境的 brokerage 上。"]
+};
+
+function softWrap(name) {
+  return name.replace(/([a-z0-9])([A-Z])/g, "$1\u200b$2");
+}
+
+function applyMode(name) {
+  const mode = modes[name];
+  document.querySelectorAll("[data-slot]").forEach((el) => {
+    const value = mode[el.dataset.slot];
+    if (value) el.textContent = softWrap(value);
+  });
+  document.getElementById("modeCaption").textContent = mode.caption;
+  document.querySelectorAll(".switch button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", btn.dataset.mode === name ? "true" : "false");
+  });
+}
+
+function show(key) {
+  const item = info[key];
+  if (!item) return;
+  document.getElementById("dKicker").textContent = item[0];
+  document.getElementById("dTitle").textContent = item[1];
+  document.getElementById("dBody").textContent = item[2];
+  document.getElementById("dMore").textContent = item[3];
+  document.getElementById("dCls").textContent = item[0];
+  document.querySelectorAll(".card, .chip").forEach((el) => {
+    el.setAttribute("aria-pressed", el.dataset.key === key ? "true" : "false");
+  });
+}
+
+document.querySelectorAll(".switch button").forEach((btn) => {
+  btn.addEventListener("click", () => applyMode(btn.dataset.mode));
+});
+document.querySelectorAll(".card, .chip").forEach((el) => {
+  el.addEventListener("click", () => show(el.dataset.key));
+});
+document.querySelectorAll(".step").forEach((el) => {
+  el.addEventListener("click", () => {
+    document.querySelectorAll(".step").forEach((s) => s.setAttribute("aria-pressed", "false"));
+    el.setAttribute("aria-pressed", "true");
+  });
+});
+applyMode("backtest");
+</script>
+</body>
+</html>

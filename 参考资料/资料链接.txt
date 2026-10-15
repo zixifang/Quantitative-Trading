@@ -1,0 +1,6 @@
+科技股csv数据集
+https://github.com/waleedkhan01/Equity-Portfolio-Management
+标准化日频OHLCVshujv
+https://github.com/lokhiufung/trading-data
+离线csv增量构建工具
+https://github.com/gargankush/marketdata_yfinance
